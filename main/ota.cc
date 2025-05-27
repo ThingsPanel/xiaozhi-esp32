@@ -46,6 +46,7 @@ std::string Ota::GetCheckVersionUrl() {
     if (url.empty()) {
         url = CONFIG_OTA_URL;
     }
+    template_secret_ = CONFIG_TEMPLATE_SECRET;
     return url;
 }
 
@@ -60,6 +61,7 @@ Http* Ota::SetupHttp() {
     http->SetHeader("User-Agent", std::string(BOARD_NAME "/") + app_desc->version);
     http->SetHeader("Accept-Language", Lang::CODE);
     http->SetHeader("Content-Type", "application/json");
+    http->SetHeader("Template-Secret", template_secret_);
 
     return http;
 }

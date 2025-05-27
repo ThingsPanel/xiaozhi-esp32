@@ -2,10 +2,15 @@ menu "Xiaozhi Assistant"
 
 config OTA_URL
     string "Default OTA URL"
-    default "https://api.tenclass.net/xiaozhi/ota/"
+    default "http://192.168.3.3:8002/xiaozhi/ota/"
     help
         The application will access this URL to check for new firmwares and server address.
 
+config TEMPLATE_SECRET
+    string "Template Secret"
+    default "testsecret"
+    help
+        Template secret for the application.
 
 choice
     prompt "Default Language"
@@ -45,7 +50,7 @@ choice BOARD_TYPE
     config BOARD_TYPE_ESP_BOX
         bool "ESP BOX"
     config BOARD_TYPE_ESP_BOX_LITE
-        bool "ESP BOX Lite"
+        bool "ESP BOX Lite"        
     config BOARD_TYPE_KEVIN_BOX_1
         bool "Kevin Box 1"
     config BOARD_TYPE_KEVIN_BOX_2
@@ -221,7 +226,7 @@ choice DISPLAY_LCD_TYPE
     config LCD_ST7796_320X480
         bool "ST7796, 分辨率320*480 IPS"
     config LCD_ST7796_320X480_NO_IPS
-        bool "ST7796, 分辨率320*480, 非IPS"
+        bool "ST7796, 分辨率320*480, 非IPS"    
     config LCD_ILI9341_240X320
         bool "ILI9341, 分辨率240*320"
     config LCD_ILI9341_240X320_NO_IPS
