@@ -496,6 +496,9 @@ void Application::Start() {
                 Schedule([this]() {
                     background_task_->WaitForCompletion();
                     SetDeviceState(kDeviceStateIdle);
+                    auto codec = Board::GetInstance().GetAudioCodec();
+                    last_output_time_ = std::chrono::steady_clock::now();
+                    codec->EnableOutput(true);
                 });
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
