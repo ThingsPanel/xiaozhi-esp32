@@ -492,6 +492,11 @@ void Application::Start() {
                         display->SetChatMessage("assistant", message.c_str());
                     });
                 }
+            } else if (strcmp(state->valuestring, "idle") == 0) {
+                Schedule([this]() {
+                    background_task_->WaitForCompletion();
+                    SetDeviceState(kDeviceStateIdle);
+                });
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
             auto text = cJSON_GetObjectItem(root, "text");
@@ -643,6 +648,9 @@ void Application::Start() {
         // Play the success sound to indicate the device is ready
         ResetDecoder();
         PlaySound(Lang::Sounds::P3_SUCCESS);
+
+        // Start Connection by default
+        protocol_->OpenAudioChannel();
     }
 
     // Print heap stats
