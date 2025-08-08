@@ -8,12 +8,15 @@
 #include <esp_app_desc.h>
 #include <algorithm>
 #include <cstring>
+#include <esp_pthread.h>
 
 #include "application.h"
 #include "display.h"
 #include "board.h"
 
 #define TAG "MCP"
+
+#define DEFAULT_TOOLCALL_STACK_SIZE 6144
 
 McpServer::McpServer() {
 }
@@ -221,7 +224,13 @@ void McpServer::ParseMessage(const cJSON* json) {
             ReplyError(id_int, "Invalid arguments");
             return;
         }
-        DoToolCall(id_int, std::string(tool_name->valuestring), tool_arguments);
+        auto stack_size = cJSON_GetObjectItem(params, "stackSize");
+        if (stack_size != nullptr && !cJSON_IsNumber(stack_size)) {
+            ESP_LOGE(TAG, "tools/call: Invalid stackSize");
+            ReplyError(id_int, "Invalid stackSize");
+            return;
+        }
+        DoToolCall(id_int, std::string(tool_name->valuestring), tool_arguments, stack_size ? stack_size->valueint : DEFAULT_TOOLCALL_STACK_SIZE);
     } else {
         ESP_LOGE(TAG, "Method not implemented: %s", method_str.c_str());
         ReplyError(id_int, "Method not implemented: " + method_str);
@@ -296,7 +305,7 @@ void McpServer::GetToolsList(int id, const std::string& cursor) {
     ReplyResult(id, json);
 }
 
-void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments) {
+void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments, int stack_size) {
     auto tool_iter = std::find_if(tools_.begin(), tools_.end(), 
                                  [&tool_name](const McpTool* tool) { 
                                      return tool->name() == tool_name; 
@@ -309,35 +318,50 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
     }
 
     PropertyList arguments = (*tool_iter)->properties();
-    for (auto& argument : arguments) {
-        bool found = false;
-        if (cJSON_IsObject(tool_arguments)) {
-            auto value = cJSON_GetObjectItem(tool_arguments, argument.name().c_str());
-            if (argument.type() == kPropertyTypeBoolean && cJSON_IsBool(value)) {
-                argument.set_value<bool>(value->valueint == 1);
-                found = true;
-            } else if (argument.type() == kPropertyTypeInteger && cJSON_IsNumber(value)) {
-                argument.set_value<int>(value->valueint);
-                found = true;
-            } else if (argument.type() == kPropertyTypeString && cJSON_IsString(value)) {
-                argument.set_value<std::string>(value->valuestring);
-                found = true;
+    try {
+        for (auto& argument : arguments) {
+            bool found = false;
+            if (cJSON_IsObject(tool_arguments)) {
+                auto value = cJSON_GetObjectItem(tool_arguments, argument.name().c_str());
+                if (argument.type() == kPropertyTypeBoolean && cJSON_IsBool(value)) {
+                    argument.set_value<bool>(value->valueint == 1);
+                    found = true;
+                } else if (argument.type() == kPropertyTypeInteger && cJSON_IsNumber(value)) {
+                    argument.set_value<int>(value->valueint);
+                    found = true;
+                } else if (argument.type() == kPropertyTypeString && cJSON_IsString(value)) {
+                    argument.set_value<std::string>(value->valuestring);
+                    found = true;
+                }
+            }
+
+            if (!argument.has_default_value() && !found) {
+                ESP_LOGE(TAG, "tools/call: Missing valid argument: %s", argument.name().c_str());
+                ReplyError(id, "Missing valid argument: " + argument.name());
+                return;
             }
         }
-
-        if (!argument.has_default_value() && !found) {
-            ESP_LOGE(TAG, "tools/call: Missing valid argument: %s", argument.name().c_str());
-            ReplyError(id, "Missing valid argument: " + argument.name());
-            return;
-        }
+    } catch (const std::exception& e) {
+        ESP_LOGE(TAG, "tools/call: %s", e.what());
+        ReplyError(id, e.what());
+        return;
     }
 
-    Application::GetInstance().Schedule([this, id, tool_iter, arguments = std::move(arguments)]() {
+    // Start a task to receive data with stack size
+    esp_pthread_cfg_t cfg = esp_pthread_get_default_config();
+    cfg.thread_name = "tool_call";
+    cfg.stack_size = stack_size;
+    cfg.prio = 1;
+    esp_pthread_set_cfg(&cfg);
+
+    // Use a thread to call the tool to avoid blocking the main thread
+    tool_call_thread_ = std::thread([this, id, tool_iter, arguments = std::move(arguments)]() {
         try {
             ReplyResult(id, (*tool_iter)->Call(arguments));
-        } catch (const std::runtime_error& e) {
+        } catch (const std::exception& e) {
             ESP_LOGE(TAG, "tools/call: %s", e.what());
             ReplyError(id, e.what());
         }
     });
+    tool_call_thread_.detach();
 }

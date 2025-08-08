@@ -2,11 +2,11 @@
 #include "k10_audio_codec.h"
 #include "display/lcd_display.h"
 #include "esp_lcd_ili9341.h"
+#include "led_control.h"
 #include "font_awesome_symbols.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
-#include "iot/thing_manager.h"
 #include "esp32_camera.h"
 
 #include "led/circular_strip.h"
@@ -36,6 +36,8 @@ private:
 
     button_driver_t* btn_a_driver_ = nullptr;
     button_driver_t* btn_b_driver_ = nullptr;
+
+    CircularStrip* led_strip_;
 
     static Df_K10Board* instance_;
 
@@ -105,7 +107,7 @@ private:
     }
     void InitializeButtons() {
         instance_ = this;
-        
+
         // Button A
         button_config_t btn_a_config = {
             .long_press_time = 1000,
@@ -168,7 +170,7 @@ private:
     }
 
     void InitializeCamera() {
-        
+
         camera_config_t config = {};
         config.ledc_channel = LEDC_CHANNEL_2;   // LEDC通道选择  用于生成XCLK时钟 但是S3不用
         config.ledc_timer = LEDC_TIMER_2;       // LEDC timer选择  用于生成XCLK时钟 但是S3不用
@@ -198,7 +200,6 @@ private:
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
         camera_ = new Esp32Camera(config);
-        camera_->SetVFlip(1);
     }
 
     void InitializeIli9341Display() {
@@ -243,8 +244,8 @@ private:
 
     // 物联网初始化，添加对 AI 可见设备
     void InitializeIot() {
-        auto &thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
+        led_strip_ = new CircularStrip(BUILTIN_LED_GPIO, 3);
+        new LedStripControl(led_strip_);
     }
 
 public:
@@ -256,16 +257,10 @@ public:
         InitializeButtons();
         InitializeIot();
         InitializeCamera();
-
-#if CONFIG_IOT_PROTOCOL_XIAOZHI
-        auto& thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
-#endif
     }
 
-    virtual Led* GetLed() override {
-        static CircularStrip led(BUILTIN_LED_GPIO, 3);
-        return &led;
+   virtual Led* GetLed() override {
+        return led_strip_;
     }
 
     virtual AudioCodec *GetAudioCodec() override {
