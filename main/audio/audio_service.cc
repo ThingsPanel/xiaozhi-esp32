@@ -586,3 +586,7 @@ void AudioService::CheckAndUpdateAudioPowerState() {
         esp_timer_stop(audio_power_timer_);
     }
 }
+
+void AudioService::UpdateLastOutputTime() {
+    last_output_time_ = std::chrono::steady_clock::now();
+}
