@@ -137,6 +137,7 @@ private:
     void OnClockTimer();
     void SetListeningMode(ListeningMode mode);
     void AudioLoop();
+    void AttemptReconnect();
 };
 
 #endif // _APPLICATION_H_

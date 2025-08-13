@@ -459,6 +459,9 @@ void Application::Start() {
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
             SetDeviceState(kDeviceStateIdle);
+            
+            // Start recursive reconnection
+            AttemptReconnect();
         });
     });
     protocol_->OnIncomingJson([this, display](const cJSON* root) {
@@ -1051,5 +1054,33 @@ void Application::SetAecMode(AecMode mode) {
         if (protocol_ && protocol_->IsAudioChannelOpened()) {
             protocol_->CloseAudioChannel();
         }
+    });
+}
+
+void Application::AttemptReconnect() {
+    // Generate random delay between 3-30 seconds
+    int delay_seconds = 3 + (esp_random() % 28); // 3 + (0-27) = 3-30
+    ESP_LOGI(TAG, "Will attempt to reconnect in %d seconds", delay_seconds);
+    vTaskDelay(pdMS_TO_TICKS(delay_seconds * 1000));
+    
+    // Check if audio channel is already opened
+    if (protocol_->IsAudioChannelOpened()) {
+        ESP_LOGI(TAG, "Audio channel is already connected, no need to reconnect");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "Attempting to reconnect audio channel...");
+    
+    // Try to open audio channel
+    if (protocol_->OpenAudioChannel()) {
+        ESP_LOGI(TAG, "Reconnection successful");
+        return;
+    }
+    
+    ESP_LOGW(TAG, "Reconnection failed, will retry with random delay");
+    
+    // If reconnection failed, schedule another attempt
+    Schedule([this]() {
+        AttemptReconnect();
     });
 }
