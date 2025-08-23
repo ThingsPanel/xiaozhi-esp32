@@ -289,7 +289,7 @@ void Application::ToggleChatState() {
     if (device_state_ == kDeviceStateIdle) {
         Schedule([this]() {
             SetDeviceState(kDeviceStateConnecting);
-            if (!protocol_->OpenAudioChannel()) {
+            if (!protocol_->IsAudioChannelOpened() && !protocol_->OpenAudioChannel()) {
                 return;
             }
 
@@ -619,7 +619,7 @@ void Application::Start() {
                 SetDeviceState(kDeviceStateConnecting);
                 wake_word_detect_.EncodeWakeWordData();
 
-                if (!protocol_ || !protocol_->OpenAudioChannel()) {
+                if (!protocol_ || (!protocol_->IsAudioChannelOpened() && !protocol_->OpenAudioChannel())) {
                     wake_word_detect_.StartDetection();
                     return;
                 }
